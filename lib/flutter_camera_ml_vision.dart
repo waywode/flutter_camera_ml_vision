@@ -13,13 +13,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_widgets/flutter_widgets.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:native_device_orientation/native_device_orientation.dart';
 
 export 'package:camera/camera.dart';
 
 part 'utils.dart';
 
 typedef HandleDetection<T> = Future<T> Function(FirebaseVisionImage image);
-typedef Widget ErrorWidgetBuilder(BuildContext context, CameraError error);
+typedef ErrorWidgetBuilder = Widget Function(
+    BuildContext context, CameraError error);
 
 enum CameraError {
   unknown,
@@ -63,7 +65,7 @@ class CameraMlVision<T> extends StatefulWidget {
 class CameraMlVisionState<T> extends State<CameraMlVision<T>>
     with WidgetsBindingObserver {
   String _lastImage;
-  Key _visibilityKey = UniqueKey();
+  final Key _visibilityKey = UniqueKey();
   CameraController _cameraController;
   ImageRotation _rotation;
   _CameraState _cameraMlVisionState = _CameraState.loading;
@@ -75,6 +77,12 @@ class CameraMlVisionState<T> extends State<CameraMlVision<T>>
   @override
   void initState() {
     super.initState();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
     WidgetsBinding.instance.addObserver(this);
     _initialize();
   }
@@ -106,7 +114,7 @@ class CameraMlVisionState<T> extends State<CameraMlVision<T>>
         await File(_lastImage).delete();
       }
 
-      Directory tempDir = await getTemporaryDirectory();
+      var tempDir = await getTemporaryDirectory();
       _lastImage = '${tempDir.path}/${DateTime.now().millisecondsSinceEpoch}';
       try {
         await _cameraController.initialize();
@@ -192,14 +200,15 @@ class CameraMlVisionState<T> extends State<CameraMlVision<T>>
       }
     }
 
-    CameraDescription description =
-        await _getCamera(widget.cameraLensDirection);
+    var description = await _getCamera(widget.cameraLensDirection);
+
     if (description == null) {
       _cameraMlVisionState = _CameraState.error;
       _cameraError = CameraError.noCameraAvailable;
 
       return;
     }
+
     await _cameraController?.dispose();
     _cameraController = CameraController(
       description,
@@ -285,7 +294,7 @@ class CameraMlVisionState<T> extends State<CameraMlVision<T>>
         ],
       );
     }
-    return VisibilityDetector(
+    final visibility = VisibilityDetector(
       child: FittedBox(
         alignment: Alignment.center,
         fit: BoxFit.cover,
@@ -309,6 +318,44 @@ class CameraMlVisionState<T> extends State<CameraMlVision<T>>
       },
       key: _visibilityKey,
     );
+
+    final scaffold = Scaffold(
+      backgroundColor: Colors.black,
+      body: NativeDeviceOrientationReader(builder: (context) {
+        var orientation = NativeDeviceOrientationReader.orientation(context);
+
+        int turns;
+        switch (orientation) {
+          case NativeDeviceOrientation.landscapeLeft:
+            turns = -1;
+            break;
+          case NativeDeviceOrientation.landscapeRight:
+            turns = 1;
+            break;
+          case NativeDeviceOrientation.portraitDown:
+            turns = 2;
+            break;
+          default:
+            turns = 0;
+            break;
+        }
+
+        return RotatedBox(
+          quarterTurns: turns,
+          child: Transform.scale(
+            scale: 1 / _cameraController.value.aspectRatio,
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: _cameraController.value.aspectRatio,
+                child: visibility,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+
+    return scaffold;
   }
 
   void _processImage(CameraImage cameraImage) async {

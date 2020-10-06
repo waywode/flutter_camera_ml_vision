@@ -21,6 +21,7 @@ dependencies:
   pedantic: ^1.9.2
   device_info: ^0.4.2+8
   camera: ^0.5.8+7
+  native_device_orientation: ^0.4.3
 
 dev_dependencies:
   flutter_test:
